@@ -1,0 +1,272 @@
+openapi: 3.0.3
+info:
+  title: SW2026 E-commerce API
+  description: In-memory REST API for user authentication and checkout.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3000
+    description: Local development
+paths:
+  /healthcheck:
+    get:
+      tags:
+        - Health
+      summary: Healthcheck
+      operationId: healthcheck
+      responses:
+        '200':
+          description: API is running
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  timestamp:
+                    type: string
+                    format: date-time
+  /register:
+    post:
+      tags:
+        - Auth
+      summary: Register a new user
+      operationId: register
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterRequest'
+            example:
+              name: Dana Lee
+              email: dana@example.com
+              password: password123
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Missing required fields
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Email already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /login:
+    post:
+      tags:
+        - Auth
+      summary: Login and receive a JWT
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            example:
+              email: alice@example.com
+              password: password123
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Missing email or password
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /checkout:
+    post:
+      tags:
+        - Checkout
+      summary: Checkout with cash or credit card
+      description: >
+        Requires a valid JWT. Cash payments receive a 10% discount.
+        Credit card payments are charged at full price.
+      operationId: checkout
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CheckoutRequest'
+            examples:
+              cash:
+                summary: Cash checkout
+                value:
+                  paymentMethod: cash
+                  items:
+                    - productId: 1
+                      quantity: 1
+                    - productId: 3
+                      quantity: 2
+              creditCard:
+                summary: Credit card checkout
+                value:
+                  paymentMethod: credit_card
+                  items:
+                    - productId: 2
+                      quantity: 1
+      responses:
+        '200':
+          description: Checkout completed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CheckoutResponse'
+        '400':
+          description: Invalid checkout payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '401':
+          description: Missing or invalid token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    RegisterRequest:
+      type: object
+      required:
+        - name
+        - email
+        - password
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+    AuthResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        token:
+          type: string
+    CheckoutItemInput:
+      type: object
+      required:
+        - productId
+        - quantity
+      properties:
+        productId:
+          type: integer
+        quantity:
+          type: integer
+          minimum: 1
+    CheckoutRequest:
+      type: object
+      required:
+        - paymentMethod
+        - items
+      properties:
+        paymentMethod:
+          type: string
+          enum:
+            - cash
+            - credit_card
+        items:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/CheckoutItemInput'
+    CheckoutLineItem:
+      type: object
+      properties:
+        productId:
+          type: integer
+        name:
+          type: string
+        unitPrice:
+          type: number
+        quantity:
+          type: integer
+        lineTotal:
+          type: number
+    CheckoutResponse:
+      type: object
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CheckoutLineItem'
+        paymentMethod:
+          type: string
+          enum:
+            - cash
+            - credit_card
+        subtotal:
+          type: number
+        discount:
+          type: number
+        discountRate:
+          type: number
+        total:
+          type: number
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
